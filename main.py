@@ -46,13 +46,14 @@ if paramCheck:
     else:
         timeReportStart = '{}-{}-1'.format(year, month)
         timeReportEnd = '{}-{}-30 23:59:59'.format(year, month)
-    # Connect to the database
-    connection = pymysql.connect(host='192.168.100.39',
-                                 user='thaonv',
-                                 password='meditech2017',
+
+    connection = pymysql.connect(host='localhost',
+                                 user='root',
+                                 password='123456',
                                  db='nagios',
                                  charset='utf8mb4',
                                  cursorclass=pymysql.cursors.DictCursor)
+
 
     workbook = Workbook()
     excelFilename = 'Bao_cao_chi_tieu_KPI_server_{}_{}.xlsx'.format(month, year)
@@ -64,7 +65,7 @@ if paramCheck:
     sheet1RowCursor = 3
 
     sheet1.merge_cells(start_row=1, end_row=2, start_column=1, end_column=1)
-    cell = sheet1.cell(1, 1, 'IP address')
+    cell = sheet1.cell(1, 1, 'Mã hệ thống')
     cell.alignment = centerAlignment
 
     sheet1.merge_cells(start_row=1, end_row=1, start_column=2, end_column=4)
@@ -118,7 +119,7 @@ if paramCheck:
             memoryGroup = cursor.fetchall()
 
         for hostIndex, hostItem in enumerate(hostGroup):
-            sheet1.cell(hostIndex+sheet1RowCursor, 1, hostItem['address'])
+            sheet1.cell(hostIndex+sheet1RowCursor, 1, hostItem['display_name'])
             with connection.cursor() as cursor:
                 sql = "SELECT output, start_time FROM nagios_hostchecks WHERE host_object_id={} and start_time between '{}' and '{}'".format(hostItem['host_object_id'], timeReportStart, timeReportEnd)
                 cursor.execute(sql)
@@ -176,14 +177,16 @@ if paramCheck:
                                     cpuDetail['min'] = min(cpuUsed, cpuDetail['min'])
                                     cpuDetail['max'] = max(cpuUsed, cpuDetail['max'])
                                     cpuSum += cpuUsed
-                            cpuDetail['min'] = round(cpuDetail['min'], 2)
-                            cpuDetail['max'] = round(cpuDetail['max'], 2)
-                            cpuDetail['average'] = round((cpuSum / cpuNumberItem), 2)
+                            try:
+                                cpuDetail['min'] = round(cpuDetail['min'], 2)
+                                cpuDetail['max'] = round(cpuDetail['max'], 2)
+                                cpuDetail['average'] = round((cpuSum / cpuNumberItem), 2)
 
-                            sheet1.cell(hostIndex + sheet1RowCursor, 5, cpuDetail['min'])
-                            sheet1.cell(hostIndex + sheet1RowCursor, 6, cpuDetail['max'])
-                            sheet1.cell(hostIndex + sheet1RowCursor, 7, cpuDetail['average'])
-
+                                sheet1.cell(hostIndex + sheet1RowCursor, 5, cpuDetail['min'])
+                                sheet1.cell(hostIndex + sheet1RowCursor, 6, cpuDetail['max'])
+                                sheet1.cell(hostIndex + sheet1RowCursor, 7, cpuDetail['average'])
+                            except:
+                                break
             for memoryItem in memoryGroup:
                 memoryObjectId = None
                 if memoryItem['host_object_id'] == hostItem['host_object_id']:
@@ -197,14 +200,12 @@ if paramCheck:
                         memoryNumberItem = cursor.rowcount
                         if memoryNumberItem > 0:
                             for cursorIndex, cursorItem in enumerate(cursor.fetchall()):
-                                memoryUsed = re.findall(r"OK - ([\d.]*)%", cursorItem['output'])
-                                if len(memoryUsed) == 0:
-                                    if 'RAM used' in cursorItem['output']:
-                                        memoryUsed = float(re.findall(r"GB \(([\d.]*)%\)", cursorItem['output'])[0])
-                                    else:
-                                        break
+                                if 'OK - RAM used' in cursorItem['output']:
+                                    memoryUsed = float(re.findall(r"\(([\d.]*)%\)", cursorItem['output'])[0])
+                                elif 'WARN - RAM used' in cursorItem['output']:
+                                    memoryUsed = float(re.findall(r"GB \(([\d.]*)%, warn/crit at", cursorItem['output'])[0])
                                 else:
-                                    memoryUsed = float(memoryUsed[0])
+                                    break
                                 if cursorIndex == 0:
                                     memoryDetail['min'] = memoryUsed
                                     memoryDetail['max'] = memoryUsed
@@ -212,12 +213,15 @@ if paramCheck:
                                     memoryDetail['min'] = min(memoryUsed, memoryDetail['min'])
                                     memoryDetail['max'] = max(memoryUsed, memoryDetail['max'])
                                     memorySum += memoryUsed
-                            memoryDetail['min'] = round(memoryDetail['min'], 2)
-                            memoryDetail['max'] = round(memoryDetail['max'], 2)
-                            memoryDetail['average'] = round((memorySum / memoryNumberItem), 2)
-                            sheet1.cell(hostIndex + sheet1RowCursor, 8, memoryDetail['min'])
-                            sheet1.cell(hostIndex + sheet1RowCursor, 9, memoryDetail['max'])
-                            sheet1.cell(hostIndex + sheet1RowCursor, 10, memoryDetail['average'])
+                            try:
+                                memoryDetail['min'] = round(memoryDetail['min'], 2)
+                                memoryDetail['max'] = round(memoryDetail['max'], 2)
+                                memoryDetail['average'] = round((memorySum / memoryNumberItem), 2)
+                                sheet1.cell(hostIndex + sheet1RowCursor, 8, memoryDetail['min'])
+                                sheet1.cell(hostIndex + sheet1RowCursor, 9, memoryDetail['max'])
+                                sheet1.cell(hostIndex + sheet1RowCursor, 10, memoryDetail['average'])
+                            except:
+                                break
         workbook.save(filename=excelFilename)
     finally:
         connection.close()
