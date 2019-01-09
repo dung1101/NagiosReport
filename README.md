@@ -4,7 +4,7 @@
 ```
 yum install python34 
 yum install python34-setuptools python34-pip
-pip3 install requirements.txt
+pip3 install -r requirements.txt
 ```
 
 ### Usage
