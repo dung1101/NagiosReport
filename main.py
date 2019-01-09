@@ -4,6 +4,7 @@ from openpyxl.styles import Alignment, Fill
 import re
 import datetime
 import sys
+from progress.bar import Bar
 
 paramCheck = True
 if len(sys.argv) == 1:
@@ -46,6 +47,13 @@ if paramCheck:
     else:
         timeReportStart = '{}-{}-1'.format(year, month)
         timeReportEnd = '{}-{}-30 23:59:59'.format(year, month)
+    # Connect to the database
+    # connection = pymysql.connect(host='192.168.100.39',
+    #                              user='thaonv',
+    #                              password='meditech2017',
+    #                              db='nagios',
+    #                              charset='utf8mb4',
+    #                              cursorclass=pymysql.cursors.DictCursor)
 
     connection = pymysql.connect(host='localhost',
                                  user='root',
@@ -53,7 +61,6 @@ if paramCheck:
                                  db='nagios',
                                  charset='utf8mb4',
                                  cursorclass=pymysql.cursors.DictCursor)
-
 
     workbook = Workbook()
     excelFilename = 'Bao_cao_chi_tieu_KPI_server_{}_{}.xlsx'.format(month, year)
@@ -118,6 +125,7 @@ if paramCheck:
             cursor.execute(sql)
             memoryGroup = cursor.fetchall()
 
+        bar = Bar('Processing', max=len(hostGroup), suffix='%(percent)d%%')
         for hostIndex, hostItem in enumerate(hostGroup):
             sheet1.cell(hostIndex+sheet1RowCursor, 1, hostItem['display_name'])
             with connection.cursor() as cursor:
@@ -167,9 +175,13 @@ if paramCheck:
                         if cpuNumberItem > 0:
                             for cursorIndex, cursorItem in enumerate(cursor.fetchall()):
                                 if 'total' in cursorItem['output']:
-                                    cpuUsed = float(re.findall(r"total: ([\d.]*)%", cursorItem['output'])[0])
+                                    cpuUsed = re.findall(r"total: ([\d.]*)%", cursorItem['output'])
                                 else:
-                                    cpuUsed = float(re.findall(r"OK - ([\d.]*)%", cursorItem['output'])[0])
+                                    cpuUsed = re.findall(r"OK - ([\d.]*)%", cursorItem['output'])
+                                if len(cpuUsed) == 0:
+                                    break
+                                else:
+                                    cpuUsed = float(cpuUsed[0])
                                 if cursorIndex == 0:
                                     cpuDetail['min'] = cpuUsed
                                     cpuDetail['max'] = cpuUsed
@@ -201,11 +213,15 @@ if paramCheck:
                         if memoryNumberItem > 0:
                             for cursorIndex, cursorItem in enumerate(cursor.fetchall()):
                                 if 'OK - RAM used' in cursorItem['output']:
-                                    memoryUsed = float(re.findall(r"\(([\d.]*)%\)", cursorItem['output'])[0])
+                                    memoryUsed = re.findall(r"\(([\d.]*)%\)", cursorItem['output'])
                                 elif 'WARN - RAM used' in cursorItem['output']:
-                                    memoryUsed = float(re.findall(r"GB \(([\d.]*)%, warn/crit at", cursorItem['output'])[0])
+                                    memoryUsed = re.findall(r"GB \(([\d.]*)%, warn/crit at", cursorItem['output'])
                                 else:
                                     break
+                                if len(memoryUsed) == 0:
+                                    break
+                                else:
+                                    memoryUsed = float(memoryUsed[0])
                                 if cursorIndex == 0:
                                     memoryDetail['min'] = memoryUsed
                                     memoryDetail['max'] = memoryUsed
@@ -222,6 +238,8 @@ if paramCheck:
                                 sheet1.cell(hostIndex + sheet1RowCursor, 10, memoryDetail['average'])
                             except:
                                 break
+            bar.next()
         workbook.save(filename=excelFilename)
+        bar.finish()
     finally:
         connection.close()
